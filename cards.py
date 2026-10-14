@@ -36,8 +36,6 @@ def build_double_deck() -> list[Card]:
 
         return cards
 
-def wild_from_indicator(indicator: Card) -> tuple[str, int]:
-        return (indicator.suit, indicator.rank % 13 + 1)
 
 
 
