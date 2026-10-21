@@ -6,7 +6,8 @@ import unittest
 from czech_cards.bots import find_melds, take_turn
 from czech_cards.cards import Card, build_double_deck
 from czech_cards.game import DRAW, OVER, PLAY, Game, GameError
-from czech_cards.rules import arrange_meld, is_meld, is_run, is_set, meld_points
+from czech_cards.rules import (arrange_meld, is_meld, is_run, is_set, joker_swap_target,
+                               meld_points)
 
 _ids = iter(range(1000, 100000))
 
@@ -180,6 +181,35 @@ class GameTests(unittest.TestCase):
         self.assertEqual(g.phase, PLAY)
         g.discard(0, g.hands[0][0].id)
         self.assertEqual((g.phase, g.winner), (OVER, 0))
+
+    def test_swap_a_joker_out_of_a_run(self):
+        g = rigged_game("2H 5C 6C 9S")
+        g.came_out[0] = True
+        g.table.append({"owner": 1, "cards": arrange_meld(hand("AH JK 3H"))})
+        two, five, six = g.hands[0][0], g.hands[0][1], g.hands[0][2]
+        with self.assertRaises(GameError):
+            g.swap_joker(0, five.id, 0)           # 5♣ isn't what the joker stands for
+        joker = g.swap_joker(0, two.id, 0)
+        self.assertEqual([c.label() for c in g.table[0]["cards"]], ["A♥", "2♥", "3♥"])
+        self.assertIn(joker, g.hands[0])
+        with self.assertRaises(GameError):
+            g.discard(0, g.hands[0][0].id)        # the joker has to be played first
+        g.lay_down(0, [[five.id, six.id, joker.id]])
+        g.discard(0, g.hands[0][0].id)
+
+    def test_set_joker_is_locked_until_all_four_suits(self):
+        self.assertIsNone(joker_swap_target(hand("9S JK 9H"), hand("9D")[0]))
+        self.assertIsNotNone(joker_swap_target(hand("9S JK 9H 9D"), hand("9C")[0]))
+        self.assertIsNone(joker_swap_target(hand("9S JK 9H 9D"), hand("9H")[0]))
+
+    def test_cant_swap_a_joker_you_couldnt_play(self):
+        g = rigged_game("9C 2D")
+        g.came_out[0] = True
+        g.table.append({"owner": 1, "cards": arrange_meld(hand("9S JK 9H 9D"))})
+        with self.assertRaises(GameError):
+            g.swap_joker(0, g.hands[0][0].id, 0)  # the joker would have nowhere to go
+        g.table.append({"owner": 2, "cards": arrange_meld(hand("7C 8C 9C"))})
+        g.swap_joker(0, g.hands[0][0].id, 0)      # now it can go on 7-8-9♣
 
     def test_pile_reshuffles_when_empty(self):
         g = Game(["a", "b", "c", "d"], rng=random.Random(5), starter=0)

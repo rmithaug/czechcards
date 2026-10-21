@@ -12,7 +12,8 @@ A turn (seats go 0 -> 1 -> 2 -> 3 -> 0):
   2. Optionally lay down runs and sets. Your FIRST lay-down ("coming out")
      has to be worth 40 points or more, all in one go.
   3. Once you've come out, optionally add cards to any run or set on the
-     table ("laying off").
+     table ("laying off"), or swap a card from your hand for a joker on the
+     table. A joker you swap out has to be played again that same turn.
   4. Throw one card onto the discard pile. EVERY turn ends this way, so you
      always have to keep at least one card back to throw away.
 You win by throwing away your last card. When the pile runs out, the
@@ -23,7 +24,7 @@ import random
 
 from .cards import Card, shuffled_deck
 from .rules import (OPENING_POINTS, arrange_meld, card_points, is_meld,
-                    joker_stands_for, meld_points)
+                    joker_stands_for, joker_swap_target, meld_points)
 
 DRAW, PLAY, OVER = "draw", "play", "over"
 HAND_SIZE = 12     # everyone is dealt 12 and draws a 13th each turn
@@ -58,6 +59,7 @@ class Game:
         self.winner: int | None = None
         self.must_play: Card | None = None   # a card taken from the discards this turn
         self.put_back_this_turn = False       # after putting it back you must use the pile
+        self.jokers_to_use: list[Card] = []   # jokers swapped off the table this turn
 
         self._say(f"Everyone gets {HAND_SIZE} cards. {self._who(self.current, 'starts')}.")
 
@@ -106,6 +108,25 @@ class Game:
         """Cards went onto the table. If one was the discard you took, you've used it."""
         if self.must_play is not None and self.must_play.id in card_ids:
             self.must_play = None
+        self.jokers_to_use = [j for j in self.jokers_to_use if j.id not in card_ids]
+
+    @staticmethod
+    def _joker_has_a_home(joker: Card, hand: list[Card], table: list[list[Card]]) -> bool:
+        """After a swap, could `joker` still go on the table this turn?
+
+        Either onto a meld in `table` (the table after the swap), or into a new
+        run/set with two cards from `hand` (the hand after the swap, not
+        counting a discard you might still put back). Either way you have to
+        keep a card to throw.
+        """
+        if len(hand) >= 1 and any(is_meld(m + [joker]) for m in table):
+            return True
+        if len(hand) >= 3:
+            for i, a in enumerate(hand):
+                for b in hand[i + 1:]:
+                    if is_meld([a, b, joker]):
+                        return True
+        return False
 
     def _check_for_win(self, seat: int) -> bool:
         if not self.hands[seat]:
@@ -218,9 +239,41 @@ class Game:
                   f"{' '.join(c.label() for c in meld['cards'])}.")
         self._played([card.id])
 
+    def swap_joker(self, seat: int, card_id: int, meld_index: int) -> Card:
+        """Put a card from your hand in place of a joker on the table, and take the joker."""
+        self._check_turn(seat, PLAY)
+        if not self.came_out[seat]:
+            raise GameError("You can only swap for a joker after you've come out.")
+        if not 0 <= meld_index < len(self.table):
+            raise GameError("There's no such meld on the table.")
+        (card,) = self._cards_from_hand(seat, [card_id])
+        meld = self.table[meld_index]
+        joker = joker_swap_target(meld["cards"], card)
+        if joker is None:
+            raise GameError(f"{card.label()} can't take the place of a joker there.")
+        new_cards = [card if c.id == joker.id else c for c in meld["cards"]]
+        if not is_meld(new_cards):
+            raise GameError(f"{card.label()} can't take the place of a joker there.")
+        rest = [c for c in self.hands[seat] if c.id != card.id and c != self.must_play]
+        table = [new_cards if i == meld_index else m["cards"] for i, m in enumerate(self.table)]
+        if not self._joker_has_a_home(joker, rest, table):
+            raise GameError("You'd have nowhere to play the joker this turn, so you can't take it.")
+
+        self._remove_from_hand(seat, [card])
+        meld["cards"] = arrange_meld(new_cards)
+        self.hands[seat].append(joker)
+        self._played([card.id])
+        self.jokers_to_use.append(joker)
+        self._say(f"{self._who(seat, 'swaps')} {card.label()} for the joker in "
+                  f"{' '.join(c.label() for c in meld['cards'])}.")
+        return joker
+
     def discard(self, seat: int, card_id: int) -> Card:
         self._check_turn(seat, PLAY)
         (card,) = self._cards_from_hand(seat, [card_id])
+        if self.jokers_to_use:
+            raise GameError("You took a joker off the table, so you have to play it in a run "
+                            "or set this turn before you throw a card away.")
         if self.must_play is not None:
             raise GameError(f"You took {self.must_play.label()} from the discards, so you have to "
                             f"use it in a run or set this turn (or put it back).")
@@ -262,6 +315,9 @@ class Game:
                 "owner": self.names[meld["owner"]],
                 "cards": [card_data(c, stands.get(c.id)) for c in meld["cards"]],
                 "points": meld_points(meld["cards"]),
+                # cards in this player's hand that could be swapped for a joker here
+                "swap_ids": [c.id for c in self.hands[seat]
+                             if joker_swap_target(meld["cards"], c) is not None],
             })
         return {
             "seat": seat,
@@ -271,6 +327,8 @@ class Game:
             "hand": [card_data(c) for c in self.hands[seat]],
             "came_out": self.came_out[seat],
             "must_play": card_data(self.must_play) if self.current == seat else None,
+            "jokers_to_use": ([card_data(j) for j in self.jokers_to_use]
+                              if self.current == seat else []),
             "opening_points": OPENING_POINTS,
             "pile_count": len(self.pile),
             "top_discard": card_data(self.top_discard()),

@@ -89,6 +89,8 @@ def act(game_id):
             game.lay_down(HUMAN_SEAT, groups)
         elif action == "lay_off":
             game.lay_off(HUMAN_SEAT, int(body["card_id"]), int(body["meld"]))
+        elif action == "swap_joker":
+            game.swap_joker(HUMAN_SEAT, int(body["card_id"]), int(body["meld"]))
         elif action == "discard":
             game.discard(HUMAN_SEAT, int(body["card_id"]))
         else:

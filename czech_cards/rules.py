@@ -9,6 +9,11 @@ Melds:
 Jokers are wild: a joker can stand in for any card, so it can be the third 7
 in a set or fill the gap in 5♥ _ 7♥. A meld still needs at least one real card.
 
+Swapping a joker: if a joker on the table stands for one exact card and you
+hold that card, you can put your card in its place and take the joker. In a
+run a joker always stands for one exact card. In a set it only does once the
+set has all 4 suits, because before that it could still be either missing suit.
+
 Points (used for the 40-point opening):
   * 2-10 are worth their number, J/Q/K are worth 10.
   * An Ace is worth 11, or 1 when it sits at the bottom of a run (A-2-3).
@@ -118,11 +123,12 @@ def joker_stands_for(cards: list[Card]) -> dict[int, str]:
     from .cards import RANK_NAMES, SUIT_SYMBOLS
     result = {}
     if is_set(cards):
+        # Until the set has all 4 suits, a joker could still be any missing suit.
         rank = _real_cards(cards)[0].rank
         missing = [s for s in "HSDC" if s not in {c.suit for c in cards}]
+        label = RANK_NAMES.get(rank, str(rank)) + "/".join(SUIT_SYMBOLS[s] for s in missing)
         for joker in (c for c in cards if c.is_joker):
-            suit = missing.pop(0) if missing else ""
-            result[joker.id] = RANK_NAMES.get(rank, str(rank)) + (SUIT_SYMBOLS[suit] if suit else "")
+            result[joker.id] = label
         return result
     layout = run_layout(cards)
     if layout is None:
@@ -133,3 +139,26 @@ def joker_stands_for(cards: list[Card]) -> dict[int, str]:
             rank = 1 if pos == 14 else pos
             result[card.id] = RANK_NAMES.get(rank, str(rank)) + SUIT_SYMBOLS[suit]
     return result
+
+
+def joker_swap_target(cards: list[Card], card: Card) -> Card | None:
+    """The joker in this meld that `card` could replace, or None.
+
+    In a run, a joker can be swapped for exactly the card it stands in for.
+    In a set, only once the set has 4 cards: then every suit is spoken for,
+    so the joker is "locked in" as the one suit that's missing.
+    """
+    if card.is_joker or not any(c.is_joker for c in cards):
+        return None
+    if is_set(cards):
+        real = _real_cards(cards)
+        if len(cards) == 4 and card.rank == real[0].rank and card.suit not in {c.suit for c in real}:
+            return next(c for c in cards if c.is_joker)
+        return None
+    layout = run_layout(cards)
+    if layout is None or card.suit != _real_cards(cards)[0].suit:
+        return None
+    for placed, pos in zip(arrange_meld(cards), layout):
+        if placed.is_joker and card.rank == (1 if pos == 14 else pos):
+            return placed
+    return None

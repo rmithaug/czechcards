@@ -135,6 +135,14 @@ function render() {
     if (canLayOff) {
       el.title = "Add your selected card here";
       el.onclick = () => act("lay_off", { card_id: [...selected][0], meld: index });
+      if (meld.swap_ids.includes([...selected][0])) {
+        const swap = document.createElement("button");
+        swap.className = "swap";
+        swap.textContent = "Swap for the joker";
+        swap.title = "Put your card in place of the joker and take the joker (you'll have to play it this turn)";
+        swap.onclick = (e) => { e.stopPropagation(); act("swap_joker", { card_id: [...selected][0], meld: index }); };
+        el.appendChild(swap);
+      }
     }
     melds.appendChild(el);
   });
@@ -183,7 +191,8 @@ function render() {
   });
 
   $("make-group").disabled = !(playing && selected.size >= 3);
-  $("discard").disabled = !(playing && selected.size === 1 && !s.must_play);
+  const mustUse = s.must_play || s.jokers_to_use.length;
+  $("discard").disabled = !(playing && selected.size === 1 && !mustUse);
   $("put-back").hidden = !(playing && s.must_play);
 
   // Message
@@ -197,6 +206,8 @@ function render() {
     showMessage(s.can_take ? "Your turn: draw from the pile, or take the discard if you can play it right away."
               : s.came_out ? "Your turn: draw from the pile."
               : "Your turn: draw from the pile. (You can take discards once you've come out.)");
+  } else if (s.jokers_to_use.length) {
+    showMessage("You took a joker off the table: play it in a run or set, or add it to the table, before you throw a card away.");
   } else if (s.must_play) {
     showMessage(`You took ${s.must_play.label}: play it in a run or set this turn, or put it back and draw from the pile.`);
   } else if (!s.came_out) {

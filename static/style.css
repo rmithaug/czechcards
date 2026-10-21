@@ -50,6 +50,7 @@ button:disabled { opacity: .4; cursor: default; }
 .meld .cards .card { width: 36px; height: 52px; font-size: 14px; }
 .meld .cards .card .suit { font-size: 15px; }
 .meld .owner { font-size: 11px; opacity: .75; }
+.meld .swap { margin-top: 4px; padding: 3px 8px; font-size: 11px; }
 .meld.target { border-color: var(--select); cursor: pointer; }
 .meld.target:hover { background: rgba(57,192,255,.2); }
 

@@ -7,7 +7,9 @@ The bot only uses what a person in its seat could see. Each turn it:
   2. Looks for runs and sets in its hand (using jokers to finish nearly-made
      ones) and lays them down, but only if it has come out already or they
      add up to 40 or more.
-  3. Once it has come out, adds any cards it can to melds on the table.
+  3. Once it has come out, swaps cards from its hand for jokers on the table
+     whenever it can (playing each joker straight away, as the rules say),
+     then adds any cards it can to melds on the table.
   4. Throws away its "loneliest" card: the one with the fewest cards of the
      same rank or close by in the same suit. It always keeps one card back
      for this, since every turn has to end with a throw.
@@ -15,7 +17,8 @@ The bot only uses what a person in its seat could see. Each turn it:
 
 from .cards import Card
 from .game import DRAW, Game, GameError
-from .rules import OPENING_POINTS, card_points, is_meld, meld_points
+from .rules import (OPENING_POINTS, card_points, is_meld, joker_swap_target,
+                    meld_points)
 
 
 def _sets(cards: list[Card]) -> list[list[Card]]:
@@ -132,6 +135,49 @@ def _play_taken_card(game: Game, seat: int) -> None:
     game.draw_from_pile(seat)
 
 
+def _use_joker(game: Game, seat: int, joker: Card) -> None:
+    """We swapped this joker off the table, so it has to go back down this turn.
+
+    Best is a new run or set with two cards from our hand; otherwise add it to
+    a meld on the table. (The game only lets us swap when one of these works.)
+    """
+    hand = [c for c in game.hands[seat] if c.id != joker.id]
+    best = None
+    if len(hand) >= 3:
+        for i, a in enumerate(hand):
+            for b in hand[i + 1:]:
+                trial = [a, b, joker]
+                if is_meld(trial) and (best is None or meld_points(trial) > meld_points(best)):
+                    best = trial
+    if best is not None:
+        game.lay_down(seat, [[c.id for c in best]])
+        return
+    for index, meld in enumerate(game.table):
+        if is_meld(meld["cards"] + [joker]):
+            game.lay_off(seat, joker.id, index)
+            return
+
+
+def _swap_jokers(game: Game, seat: int) -> None:
+    """Trade cards from our hand for jokers on the table, using each joker right away."""
+    swapped = True
+    while swapped and len(game.hands[seat]) > 1:
+        swapped = False
+        for card in list(game.hands[seat]):
+            for index, meld in enumerate(game.table):
+                if joker_swap_target(meld["cards"], card) is None:
+                    continue
+                try:
+                    joker = game.swap_joker(seat, card.id, index)
+                except GameError:
+                    continue
+                _use_joker(game, seat, joker)
+                swapped = True
+                break
+            if swapped:
+                break
+
+
 def take_turn(game: Game, seat: int) -> None:
     # 1. Draw.
     if game.phase == DRAW:
@@ -153,8 +199,10 @@ def take_turn(game: Game, seat: int) -> None:
         except GameError:
             pass
 
-    # 3. Add whatever fits onto the table, again keeping one card back.
+    # 3. Swap for jokers, then add whatever fits onto the table, again
+    #    keeping one card back.
     if game.came_out[seat]:
+        _swap_jokers(game, seat)
         added = True
         while added and len(game.hands[seat]) > 1:
             added = False
