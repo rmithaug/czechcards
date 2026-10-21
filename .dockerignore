@@ -1,0 +1,10 @@
+# Things that don't belong in the container
+.venv/
+__pycache__/
+*.pyc
+.git/
+.vscode/
+.DS_Store
+starter/
+tests/
+*.zip

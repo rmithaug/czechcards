@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Czech Cards</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header>
+    <h1>Czech Cards</h1>
+    <div class="header-buttons">
+      <button id="rules-button" class="ghost">Rules</button>
+      <button id="new-game">New game</button>
+    </div>
+  </header>
+
+  <main id="table-area">
+    <section id="opponents" class="opponents"></section>
+
+    <section class="middle">
+      <div class="slot">
+        <div class="slot-label">Pile (<span id="pile-count">0</span>)</div>
+        <button id="pile" class="card back" title="Draw from the pile"></button>
+      </div>
+      <div class="slot">
+        <div class="slot-label">Discard</div>
+        <div id="discard-slot"></div>
+      </div>
+      <div class="melds-wrap">
+        <div class="slot-label">On the table</div>
+        <div id="melds" class="melds"></div>
+      </div>
+    </section>
+
+    <section class="me">
+      <div id="message" class="message"></div>
+
+      <div id="staging" class="staging" hidden>
+        <div class="staging-head">
+          <span>Ready to lay down: <b id="staging-total">0</b> points</span>
+          <span class="spacer"></span>
+          <button id="lay-down">Lay down</button>
+          <button id="clear-groups" class="ghost">Put back</button>
+        </div>
+        <div id="groups" class="groups"></div>
+      </div>
+
+      <div id="hand" class="hand"></div>
+      <div class="controls">
+        <button id="sort-suit" class="ghost">Sort by suit</button>
+        <button id="sort-rank" class="ghost">Sort by number</button>
+        <span class="spacer"></span>
+        <button id="put-back" class="ghost" hidden>Put it back</button>
+        <button id="make-group" disabled>Make a run/set</button>
+        <button id="discard" disabled>Throw away</button>
+      </div>
+      <div class="hint">Click cards to select them. Drag to rearrange. To add a card to a meld on the table, select one card and click the meld.</div>
+    </section>
+  </main>
+
+  <aside>
+    <h2>Game log</h2>
+    <ol id="log"></ol>
+  </aside>
+
+  <dialog id="rules">
+    <h2>How to play</h2>
+    <ul>
+      <li>Two decks with jokers, 4 players. Everyone is dealt 12 cards.</li>
+      <li><b>Your turn:</b> draw a card, lay down or add cards if you can, then throw one card away.</li>
+      <li><b>Run:</b> 3+ cards of one suit in a row (A-2-3 and Q-K-A are fine, K-A-2 is not).<br><b>Set:</b> 3 or 4 of the same number in different suits.</li>
+      <li><b>Jokers are wild</b> and can stand in for any card.</li>
+      <li><b>Coming out:</b> your first lay-down must add up to <b>40 points</b> or more, all at once. Number cards are worth their number, J/Q/K are 10, an Ace is 11 (1 in A-2-3), and a joker is worth the card it replaces.</li>
+      <li>Until you've come out you can only draw from the pile. Afterwards you can also take the top discard, but <b>you have to play it in a run or set that same turn</b>. You can also add cards to any meld on the table.</li>
+      <li><b>Every turn ends by throwing a card away</b>, so always keep one card back.</li>
+      <li>When the pile runs out, the discards are shuffled into a new pile.</li>
+      <li>You win by throwing away your last card.</li>
+    </ul>
+    <form method="dialog"><button>Got it</button></form>
+  </dialog>
+
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
