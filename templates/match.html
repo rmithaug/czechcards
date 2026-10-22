@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Czech Cards: Match</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <style>
+    .scoreboard { background: rgba(0,0,0,.18); border-radius: 10px; padding: 8px 12px; }
+    .scoreboard-head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+    .scoreboard table { border-collapse: collapse; font-size: 14px; }
+    .scoreboard th, .scoreboard td { padding: 2px 10px; text-align: right; }
+    .scoreboard th:first-child, .scoreboard td:first-child { text-align: left; }
+    .scoreboard tr.total td { font-weight: 700; border-top: 1px solid rgba(255,255,255,.3); }
+    .scoreboard td.best { color: var(--gold); }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Czech Cards</h1>
+    <div class="header-buttons">
+      <button id="rules-button" class="ghost">Rules</button>
+      <button id="new-game">New match</button>
+    </div>
+  </header>
+
+  <main id="table-area">
+    <section id="scoreboard" class="scoreboard">
+      <div class="scoreboard-head">
+        <b id="deal-label">Deal 1</b>
+        <span class="spacer"></span>
+        <button id="next-deal" hidden>Next deal</button>
+      </div>
+      <table id="score-table"></table>
+    </section>
+
+    <section id="opponents" class="opponents"></section>
+
+    <section class="middle">
+      <div class="slot">
+        <div class="slot-label">Pile (<span id="pile-count">0</span>)</div>
+        <button id="pile" class="card back" title="Draw from the pile"></button>
+      </div>
+      <div class="slot">
+        <div class="slot-label">Discard</div>
+        <div id="discard-slot"></div>
+      </div>
+      <div class="melds-wrap">
+        <div class="slot-label">On the table</div>
+        <div id="melds" class="melds"></div>
+      </div>
+    </section>
+
+    <section class="me">
+      <div id="message" class="message"></div>
+
+      <div id="staging" class="staging" hidden>
+        <div class="staging-head">
+          <span>Ready to lay down: <b id="staging-total">0</b> points</span>
+          <span class="spacer"></span>
+          <button id="lay-down">Lay down</button>
+          <button id="clear-groups" class="ghost">Put back</button>
+        </div>
+        <div id="groups" class="groups"></div>
+      </div>
+
+      <div id="hand" class="hand"></div>
+      <div class="controls">
+        <button id="sort-suit" class="ghost">Sort by suit</button>
+        <button id="sort-rank" class="ghost">Sort by number</button>
+        <span class="spacer"></span>
+        <button id="put-back" class="ghost" hidden>Put it back</button>
+        <button id="make-group" disabled>Make a run/set</button>
+        <button id="discard" disabled>Throw away</button>
+      </div>
+      <div class="hint">Click cards to select them. Drag to rearrange. To add a card to a meld on the table, select one card and click the meld.</div>
+    </section>
+  </main>
+
+  <aside>
+    <h2>Game log</h2>
+    <ol id="log"></ol>
+  </aside>
+
+  <dialog id="rules">
+    <h2>How to play</h2>
+    <ul>
+      <li>Two decks with jokers, 4 players. Everyone is dealt 12 cards.</li>
+      <li><b>Your turn:</b> draw a card, lay down or add cards if you can, then throw one card away.</li>
+      <li><b>Run:</b> 3+ cards of one suit in a row (A-2-3 and Q-K-A are fine, K-A-2 is not).<br><b>Set:</b> 3 or 4 of the same number in different suits.</li>
+      <li><b>Jokers are wild</b> and can stand in for any card.</li>
+      <li><b>Coming out:</b> your first lay-down must add up to <b>40 points</b> or more, all at once. Number cards are worth their number, J/Q/K are 10, an Ace is 11 (1 in A-2-3), and a joker is worth the card it replaces.</li>
+      <li>Until you've come out you can only draw from the pile. Afterwards you can also take the top discard, but <b>you have to play it in a run or set that same turn</b>. You can also add cards to any meld on the table.</li>
+      <li><b>Swapping a joker:</b> once you've come out, if you hold the exact card a joker on the table stands for, you can put your card in its place and take the joker, but <b>you have to play the joker that same turn</b>. A joker in a set is locked until the set has all 4 suits.</li>
+      <li><b>Every turn ends by throwing a card away</b>, so always keep one card back.</li>
+      <li>When the pile runs out, the discards are shuffled into a new pile.</li>
+      <li>A deal ends when someone throws away their last card. They score 0.</li>
+      <li><b>Everyone else scores the cards left in their hand:</b> 2-10 count their number, J/Q/K count 10, an Ace counts 11 and a joker counts 12.</li>
+      <li><b>A match has one deal per player</b> (4 deals), and the dealer moves round each time. <b>The lowest total wins.</b> So when someone is about to go out, it can pay to throw away your high cards.</li>
+    </ul>
+    <form method="dialog"><button>Got it</button></form>
+  </dialog>
+
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+  <script src="{{ url_for('static', filename='match.js') }}"></script>
+</body>
+</html>
