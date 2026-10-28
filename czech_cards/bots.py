@@ -1,24 +1,19 @@
-"""A simple computer player.
+"""A basic computer player, used as a simple baseline for the learning bots.
 
-The bot only uses what a person in its seat could see. Each turn it:
-  1. Draws. Once it has come out, it takes the top discard only if it can
-     play it straight away (the rules say a taken discard must be played
-     that turn); otherwise it draws from the pile.
-  2. Looks for runs and sets in its hand (using jokers to finish nearly-made
-     ones) and lays them down, but only if it has come out already or they
-     add up to 40 or more.
-  3. Once it has come out, swaps cards from its hand for jokers on the table
-     whenever it can (playing each joker straight away, as the rules say),
-     then adds any cards it can to melds on the table.
-  4. Throws away its "loneliest" card: the one with the fewest cards of the
-     same rank or close by in the same suit. It always keeps one card back
-     for this, since every turn has to end with a throw.
+It plays by the rules but has no strategy. Each turn it:
+  1. Draws from the face-down pile. It never takes the discard.
+  2. Looks for sets, then runs, in its hand (using jokers to finish
+     nearly-made ones) and lays them down, but only if it has come out
+     already or they add up to 40 or more.
+  3. Once it has come out, adds any cards it can to melds on the table.
+  4. Throws away a random card that isn't part of a set or run. Jokers are
+     never thrown away while there's another card to throw.
+It always keeps one card back, since every turn has to end with a throw.
 """
 
 from .cards import Card
 from .game import DRAW, Game, GameError
-from .rules import (OPENING_POINTS, card_points, is_meld, joker_swap_target,
-                    meld_points)
+from .rules import OPENING_POINTS, is_meld, meld_points
 
 
 def _sets(cards: list[Card]) -> list[list[Card]]:
@@ -87,108 +82,8 @@ def find_melds(hand: list[Card]) -> list[list[Card]]:
     return melds
 
 
-def loneliness(card: Card, hand: list[Card]) -> tuple:
-    """Higher = more alone. Bots throw away the loneliest card."""
-    if card.is_joker:
-        return (-100, 0)  # never throw a joker if there's anything else
-    friends = 0
-    for other in hand:
-        if other.id == card.id or other.is_joker:
-            continue
-        if other.rank == card.rank and other.suit != card.suit:
-            friends += 2
-        elif other.suit == card.suit and 0 < abs(other.rank - card.rank) <= 2:
-            friends += 3 - abs(other.rank - card.rank)
-    return (-friends, card_points(card))
-
-
-def _fits_table(game: Game, card: Card) -> bool:
-    return any(is_meld(m["cards"] + [card]) for m in game.table)
-
-
-def _meld_using(hand: list[Card], card: Card) -> list[Card] | None:
-    """A meld from `hand` that includes `card`, leaving at least one card to throw away."""
-    for meld in find_melds(hand):
-        if card in meld and len(hand) - len(meld) >= 1:
-            return meld
-    return None
-
-
-def _can_use(game: Game, seat: int, card: Card) -> bool:
-    """Could we play this card straight away if we picked it up?"""
-    hand = game.hands[seat] + [card]
-    return (_fits_table(game, card) and len(hand) >= 2) or _meld_using(hand, card) is not None
-
-
-def _play_taken_card(game: Game, seat: int) -> None:
-    """We took the discard, so it has to go on the table this turn."""
-    card = game.must_play
-    meld = _meld_using(game.hands[seat], card)
-    if meld is not None:
-        game.lay_down(seat, [[c.id for c in meld]])
-        return
-    for index, table_meld in enumerate(game.table):
-        if is_meld(table_meld["cards"] + [card]):
-            game.lay_off(seat, card.id, index)
-            return
-    game.put_back(seat)  # shouldn't happen, but never get stuck
-    game.draw_from_pile(seat)
-
-
-def _use_joker(game: Game, seat: int, joker: Card) -> None:
-    """We swapped this joker off the table, so it has to go back down this turn.
-
-    Best is a new run or set with two cards from our hand; otherwise add it to
-    a meld on the table. (The game only lets us swap when one of these works.)
-    """
-    hand = [c for c in game.hands[seat] if c.id != joker.id]
-    best = None
-    if len(hand) >= 3:
-        for i, a in enumerate(hand):
-            for b in hand[i + 1:]:
-                trial = [a, b, joker]
-                if is_meld(trial) and (best is None or meld_points(trial) > meld_points(best)):
-                    best = trial
-    if best is not None:
-        game.lay_down(seat, [[c.id for c in best]])
-        return
-    for index, meld in enumerate(game.table):
-        if is_meld(meld["cards"] + [joker]):
-            game.lay_off(seat, joker.id, index)
-            return
-
-
-def _swap_jokers(game: Game, seat: int) -> None:
-    """Trade cards from our hand for jokers on the table, using each joker right away."""
-    swapped = True
-    while swapped and len(game.hands[seat]) > 1:
-        swapped = False
-        for card in list(game.hands[seat]):
-            for index, meld in enumerate(game.table):
-                if joker_swap_target(meld["cards"], card) is None:
-                    continue
-                try:
-                    joker = game.swap_joker(seat, card.id, index)
-                except GameError:
-                    continue
-                _use_joker(game, seat, joker)
-                swapped = True
-                break
-            if swapped:
-                break
-
-
-def take_turn(game: Game, seat: int) -> None:
-    # 1. Draw.
-    if game.phase == DRAW:
-        top = game.top_discard()
-        if top is not None and game.came_out[seat] and _can_use(game, seat, top):
-            game.take_discard(seat)
-            _play_taken_card(game, seat)
-        else:
-            game.draw_from_pile(seat)
-
-    # 2. Lay down runs and sets (always keeping one card to throw away).
+def _lay_down(game: Game, seat: int) -> None:
+    """Lay down every set and run we found, keeping one card to throw away."""
     melds = find_melds(game.hands[seat])
     while melds and sum(len(m) for m in melds) >= len(game.hands[seat]):
         melds.pop()  # too many: hold one meld back
@@ -199,23 +94,37 @@ def take_turn(game: Game, seat: int) -> None:
         except GameError:
             pass
 
-    # 3. Swap for jokers, then add whatever fits onto the table, again
-    #    keeping one card back.
-    if game.came_out[seat]:
-        _swap_jokers(game, seat)
-        added = True
-        while added and len(game.hands[seat]) > 1:
-            added = False
-            for card in list(game.hands[seat]):
-                for index, meld in enumerate(game.table):
-                    if is_meld(meld["cards"] + [card]):
-                        game.lay_off(seat, card.id, index)
-                        added = True
-                        break
-                if added or len(game.hands[seat]) <= 1:
-                    break
 
-    # 4. Throw away the loneliest card. (Throwing away the last card wins.)
+def _lay_off(game: Game, seat: int) -> None:
+    """Add whatever fits onto the table, keeping one card to throw away."""
+    added = True
+    while added and len(game.hands[seat]) > 1:
+        added = False
+        for card in list(game.hands[seat]):
+            for index, meld in enumerate(game.table):
+                if is_meld(meld["cards"] + [card]):
+                    game.lay_off(seat, card.id, index)
+                    added = True
+                    break
+            if added or len(game.hands[seat]) <= 1:
+                break
+
+
+def _random_throw(game: Game, seat: int) -> Card:
+    """A random card that isn't in a set or run (and isn't a joker, if possible)."""
     hand = game.hands[seat]
-    worst = max(hand, key=lambda c: loneliness(c, hand))
-    game.discard(seat, worst.id)
+    in_melds = {c.id for m in find_melds(hand) for c in m}
+    for choices in ([c for c in hand if c.id not in in_melds and not c.is_joker],
+                    [c for c in hand if not c.is_joker],
+                    hand):
+        if choices:
+            return game.rng.choice(choices)
+
+
+def take_turn(game: Game, seat: int) -> None:
+    if game.phase == DRAW:
+        game.draw_from_pile(seat)                       # 1. draw
+    _lay_down(game, seat)                               # 2. lay down sets and runs
+    if game.came_out[seat]:
+        _lay_off(game, seat)                            # 3. add to the table
+    game.discard(seat, _random_throw(game, seat).id)    # 4. throw a random spare card
